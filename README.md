@@ -5,7 +5,7 @@ Scenario: Build a software model of a 4-port 10 GbE L3 switch that runs on a mul
 ## Constraints
 
 - [x] 4 ports, each at 10 Gbps line rate with worst-case traffic of 64B frames
-- [x] Forwarding table: 500K IPv4 routes (longest-prefix match), with route updates arriving at ~1K/sec while forwarding continues
+- [ ] Forwarding table: 500K IPv4 routes (longest-prefix match), with route updates arriving at ~1K/sec while forwarding continues
 - [x] 8 egress queues per port: queue 7 is strict priority (control traffic), queues 0-6 share bandwidth by weight
 - [x] Egress buffer: 12 MB shared across all queues
 - [ ] Target: sustain line rate with zero loss in steady state, p99.9 forwarding latency under 50 µs, and no more than 2 cores per port
