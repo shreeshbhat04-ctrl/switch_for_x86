@@ -1,7 +1,0 @@
-packet_generator_test 8 0.0134849
-parser_test 5 0.0670639
-lpm_reference_test 5 0.0331375
-scheduler_test 5 0.007745
-ring_stress_test 5 0.00751406
-pool_mt_test 5 0.00964964
----
