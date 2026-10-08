@@ -1,6 +1,8 @@
 #pragma once
 #include <cstdint>
 
+namespace switchmodel {
+
 #if defined(_WIN32) || defined(_MSC_VER)
 inline constexpr bool host_is_little_endian = true;
 #elif defined(__BYTE_ORDER__) && defined(__ORDER_LITTLE_ENDIAN__)
@@ -35,4 +37,6 @@ inline constexpr uint32_t ntohl(uint32_t val) noexcept{
     }else{
         return val;
     }
+}
+
 }

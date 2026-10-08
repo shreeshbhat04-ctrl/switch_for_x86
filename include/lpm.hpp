@@ -1,85 +1,141 @@
 #pragma once
 
+#include <array>
+#include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <vector>
-#include <algorithm>
 
 namespace switchmodel {
-    class lpmtable{
-        private:
-        struct TrieNode{
-            bool is_port{false};
-            int outport_interf{-1};
-            std::unique_ptr<TrieNode> left{nullptr};// bit 0
-            std::unique_ptr<TrieNode> right{nullptr};// bit 1
 
-        };
-        std::unique_ptr<TrieNode>root;
-        size_t node_cnt{1};
-        public:
-        lpmtable() : root(std::make_unique<TrieNode>()){}
-        
-        void insert(uint32_t prefix,uint8_t prefix_len,int out_interf){
-            TrieNode* curr=root.get();
-            for(int i=0;i<prefix_len;++i){
-                bool bit =(prefix&(1U << (31-i)))!=0;
-                if(!bit){
-                    if(!curr->left){
-                        curr->left = std::make_unique<TrieNode>();
-                        node_cnt++;
-                    }
-                }else{
-                   if(!curr->right){
-                        curr->right = std::make_unique<TrieNode>();
-                        node_cnt++;
-                    }
-                }
-            }
-            curr->is_port =true;
-            curr->outport_interf=out_interf;
+    class lpmtable {
+    private:
+    static constexpr std::size_t stride_bits = 4;
+    static constexpr std::size_t stride_count = 1U << stride_bits;
+    static constexpr std::size_t max_levels = 32 / stride_bits;
+
+    struct Node {
+        std::array<int32_t, stride_count> child{};
+        int outport{-1};
+
+        Node() noexcept
+        {
+            child.fill(-1);
         }
-        
-        [[nodiscard]] int lookup(uint32_t dstip)const noexcept{
-            const TrieNode* cur=root.get();
-            int bstprt=-1;
-             // default root 0.0.0.0/0
-            if(cur->is_port){
-                bstprt=cur->outport_interf;
-            }
-            for (int i = 0; i < 32; i++)
-            {
-                bool bit =(dstip&(1U<<(31-i)))!=0;
-                if(!bit){
-                    if(cur->left){
-                        cur=cur->left.get();
-                    }else{
-                        break;
-                    }
-                }else{
-                    if(cur->right){
-                        cur=cur->right.get();
-                    }else{
-                        break;
-                    }
-                }
-                if(cur->is_port){
-                    bstprt=cur->outport_interf;
-                }
-
-            }
-            return bstprt;
-        }
-
-        [[nodiscard]] size_t get_nod_cnt()const noexcept{
-            return node_cnt;
-        }
-
-        //rst
-        void clear(){
-            root=std::make_unique<TrieNode>();
-            node_cnt=1;
-        }
-
     };
+
+    struct Snapshot {
+        std::vector<Node> nodes;
+
+        Snapshot() : nodes(1) {}
+    };
+
+    std::shared_ptr<const Snapshot> snapshot_;
+    mutable std::mutex update_mutex_;
+
+    static uint8_t nibble(uint32_t prefix, std::size_t level) noexcept
+    {
+        const std::size_t shift = 28 - level * stride_bits;
+        return static_cast<uint8_t>((prefix >> shift) & 0x0FU);
+    }
+
+    static int32_t clone_child(Snapshot& snapshot, int32_t parent, uint8_t index)
+    {
+        const int32_t child = snapshot.nodes[parent].child[index];
+        if (child >= 0) {
+            return child;
+        }
+        snapshot.nodes[parent].child[index] =
+            static_cast<int32_t>(snapshot.nodes.size());
+        snapshot.nodes.emplace_back();
+        return snapshot.nodes[parent].child[index];
+    }
+
+    static void insert_route(
+        Snapshot& snapshot, uint32_t prefix, uint8_t prefix_len, int outport)
+    {
+        const std::size_t full_levels = prefix_len / stride_bits;
+        const uint8_t remainder = prefix_len % stride_bits;
+        int32_t node = 0;
+
+        for (std::size_t level = 0; level < full_levels; ++level) {
+            node = clone_child(snapshot, node, nibble(prefix, level));
+        }
+
+        if (remainder == 0) {
+            snapshot.nodes[node].outport = outport;
+            return;
+        }
+
+        const uint8_t selected = nibble(prefix, full_levels);
+        const uint8_t mask = static_cast<uint8_t>(
+            0x0FU << (stride_bits - remainder));
+        const uint8_t first = selected & mask;
+        const uint8_t last = static_cast<uint8_t>(first | ((1U << (stride_bits - remainder)) - 1U));
+        for (uint8_t value = first; value <= last; ++value) {
+            const int32_t child = clone_child(snapshot, node, value);
+            snapshot.nodes[child].outport = outport;
+        }
+    }
+
+    public:
+    lpmtable() : snapshot_(std::make_shared<const Snapshot>()) {}
+
+    void insert(uint32_t prefix, uint8_t prefix_len, int out_interf)
+    {
+        if (prefix_len > 32) {
+            return;
+        }
+
+        std::lock_guard<std::mutex> lock(update_mutex_);
+        const auto current = std::atomic_load_explicit(
+            &snapshot_, std::memory_order_acquire);
+        auto next = std::make_shared<Snapshot>(*current);
+        insert_route(*next, prefix, prefix_len, out_interf);
+        std::atomic_store_explicit(
+            &snapshot_,
+            std::shared_ptr<const Snapshot>(std::move(next)),
+            std::memory_order_release);
+    }
+
+    [[nodiscard]] int lookup(uint32_t dstip) const noexcept
+    {
+        const auto snapshot = std::atomic_load_explicit(
+            &snapshot_, std::memory_order_acquire);
+        int best_port = snapshot->nodes[0].outport;
+        int32_t node = 0;
+
+        for (std::size_t level = 0; level < max_levels; ++level) {
+            const int32_t child =
+                snapshot->nodes[node].child[nibble(dstip, level)];
+            if (child < 0) {
+                break;
+            }
+            node = child;
+            if (snapshot->nodes[node].outport >= 0) {
+                best_port = snapshot->nodes[node].outport;
+            }
+        }
+        return best_port;
+    }
+
+    [[nodiscard]] std::size_t get_nod_cnt() const noexcept
+    {
+        const auto snapshot = std::atomic_load_explicit(
+            &snapshot_, std::memory_order_acquire);
+        return snapshot->nodes.size();
+    }
+
+    void clear()
+    {
+        std::lock_guard<std::mutex> lock(update_mutex_);
+        std::atomic_store_explicit(
+            &snapshot_,
+            std::make_shared<const Snapshot>(),
+            std::memory_order_release);
+    }
+};
+
 }

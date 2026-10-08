@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <queue>
+#include <array>
 #include <cstdint>
 #include <algorithm>
 #include "buffer.hpp"
@@ -9,7 +10,7 @@ namespace switchmodel{
     struct egressqueue{
         std::queue<bufferblock*>blocks;
         int weight{0};
-        int deficit{0};
+        std::size_t deficit{0};
         size_t max_pckt{1000};
     };
     class egressscheduler{
@@ -26,10 +27,10 @@ namespace switchmodel{
       bool enqueue(bufferblock* block)noexcept{
         if(!block)return false;
 
-        uint8_t targ_que=block->metadata.is_corrupted?0:block->metadata.egress_port;
-
-        int8_t q_idx =(block->metadata.ingress_port == 0)?control_que:(block->metadata.src_ip%7);
-        if(q_idx>7)q_idx=0;
+        const std::size_t targ_que = block->metadata.is_corrupted
+            ? 0 : (block->metadata.egress_port % 7);
+        const std::size_t q_idx = block->metadata.is_control
+            ? control_que : targ_que;
         if(q[q_idx].blocks.size()>=q[q_idx].max_pckt){
             return false;// tail drop
         }
@@ -48,19 +49,17 @@ namespace switchmodel{
         egressqueue& q1=q[cur_drr_idx];
         if(!q1.blocks.empty()){
             // add quantum (weight*mtu)
-            q1.deficit+=q1.weight*100;
+            q1.deficit += static_cast<std::size_t>(q1.weight) * 100;
             bufferblock* head_blk=q1.blocks.front();
-            size_t pkt_sz=head_blk->length;
-
-            if(pkt_sz<=static_cast<size_t>(q1.deficit)){
-                // dedcut credit
-                q1.deficit-=static_cast<int>(pkt_sz);
+            const size_t pkt_sz=head_blk->length;
+            if (pkt_sz <= q1.deficit) {
+                q1.deficit -= pkt_sz;
                 q1.blocks.pop();
-                //advcan rr idx for schedul pass
-                cur_drr_idx=(cur_drr_idx+1)%7;
-                return  head_blk;
-            }else{
-                //pass
+                if (q1.blocks.empty()) {
+                    q1.deficit = 0;
+                    cur_drr_idx = (cur_drr_idx + 1) % 7;
+                }
+                return head_blk;
             }
         }else{
             //rst the que if empty

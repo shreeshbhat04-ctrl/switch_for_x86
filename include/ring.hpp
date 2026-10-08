@@ -1,32 +1,34 @@
 #pragma once
 #include <new>
 #include <atomic>
-#include <memory>
-#include <concepts>
-#include <bit>
+#include <array>
+#include <cstddef>
 #include <utility>
-#include <optional>
 
 template <typename T,size_t capacity>
-class alignas(std::hardware_constructive_interference_size)Spscringbuffer{
+class Spscringbuffer{
  static_assert(capacity>=2,"capacity must be at least 2");
- static_assert(std::has_single_bit(capacity),"capac must be power of two");
+ static_assert((capacity & (capacity - 1)) == 0,"capacity must be power of two");
  public:
     using value_type=T;
-    Spscringbuffer():storage_(std::make_unique<storagetype[]>(capacity)){}
+    Spscringbuffer() = default;
     ~Spscringbuffer(){
-        T dummy;
-        while(pop(dummy));
+        const size_t read_idx = read_index_.load(std::memory_order_relaxed);
+        const size_t write_idx = write_index_.load(std::memory_order_relaxed);
+        for (size_t index = read_idx; index != write_idx; ++index) {
+            T* ptr = reinterpret_cast<T*>(&storage_[index & index_mask]);
+            ptr->~T();
+        }
     }
     //disable copying
     Spscringbuffer(const Spscringbuffer&)=delete;
     Spscringbuffer& operator=(const Spscringbuffer&) = delete;
     // enable moving
-    Spscringbuffer(Spscringbuffer&&) noexcept = default;
-    Spscringbuffer& operator=(Spscringbuffer&&) noexcept = default;
+    Spscringbuffer(Spscringbuffer&&) noexcept = delete;
+    Spscringbuffer& operator=(Spscringbuffer&&) noexcept = delete;
 
 template<typename... Args>
-    bool emplace(Args&... args){
+    bool emplace(Args&&... args){
         const size_t write_idx=write_index_.load(std::memory_order_relaxed);
         if(write_idx - cached_read_index_==capacity){
            cached_read_index_=read_index_.load(std::memory_order_acquire);
@@ -35,7 +37,7 @@ template<typename... Args>
            }
         }
         T* ptr=reinterpret_cast<T*>(&storage_[write_idx & index_mask]);
-        std::construct_at(ptr,std::forward<Args>(args)...);
+        ::new (static_cast<void*>(ptr)) T(std::forward<Args>(args)...);
         write_index_.store(write_idx+1,std::memory_order_release);
         return true;
     }
@@ -55,8 +57,8 @@ template<typename... Args>
         }
         T* ptr=reinterpret_cast<T*>(&storage_[read_idx & index_mask]);
         item=std::move(*ptr);
-        std::destroy_at(ptr);
-        read_index_.store(read_idx+1,std::memory_order_relaxed);
+        ptr->~T();
+        read_index_.store(read_idx+1,std::memory_order_release);
         return true;
     }
 [[nodiscard]]bool empty()const noexcept{
@@ -65,22 +67,21 @@ template<typename... Args>
 [[nodiscard]]size_t size()const noexcept{
     size_t write=write_index_.load(std::memory_order_relaxed);
     size_t read=read_index_.load(std::memory_order_relaxed);
-    return (write>=read)?(write-read):(capacity-(read-write));
+    return write - read;
 }
 
 
     private:
     static constexpr size_t index_mask=capacity-1;
-    static constexpr size_t cachelinesz=std::hardware_destructive_interference_size;
+    static constexpr size_t cachelinesz=64;
 
     //use aligned storage 
     struct alignas(alignof(T)) storagetype{
         alignas(alignof(T))std::byte data[sizeof(T)];
     };
-    std::unique_ptr<storagetype[]>storage;
     alignas(cachelinesz) std::atomic<size_t>read_index_{0};
+    size_t cached_write_index_{0};
     alignas(cachelinesz) std::atomic<size_t>write_index_{0};
-
-    alignas(cachelinesz) size_t cached_read_index_{0};
-    alignas(cachelinesz) size_t cached_write_index_{0};
+    size_t cached_read_index_{0};
+    std::array<storagetype, capacity> storage_{};
 };

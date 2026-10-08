@@ -5,16 +5,17 @@
 #include <array>
 #include <atomic>
 #include <memory>
+#include <mutex>
 #include "packet.hpp"
 
 namespace switchmodel{
     constexpr size_t total_buffer_bytes = 12*1024*1024; //12Mb shared egress
-    constexpr size_t block_sz=2048;
+    constexpr size_t block_sz=max_frame_sz;
     constexpr size_t num_blocks=total_buffer_bytes/block_sz;
     //fixed-sz memory block
     struct bufferblock
     {
-        std::array<uint8_t,block_sz>data;
+        std::array<uint8_t, block_sz> data{};
         size_t length{0};
         packetmetadata metadata;
     };
@@ -23,57 +24,60 @@ namespace switchmodel{
       // caching the contiguos memory
       std::vector<bufferblock>blocks;
       // buffer indices lock free
-      std::unique_ptr<std::atomic<int32_t>[]>estack;
-      std::atomic<int32_t>etop{-1};
-      //track cur allocated byte
-      std::atomic<size_t>curr_abyte{0};
+      std::vector<int32_t> free_indices;
+      std::vector<bool> allocated;
+      mutable std::mutex free_mutex;
+      size_t allocated_bytes{0};
       public:
       egressbufferpool(){
         blocks.resize(num_blocks);
-        estack=std::make_unique<std::atomic<int32_t>[]>(num_blocks);
+        free_indices.reserve(num_blocks);
+        allocated.assign(num_blocks, false);
         for (size_t i = 0; i < num_blocks; i++)
         {
-            estack[i].store(static_cast<int32_t>(i),std::memory_order_relaxed);
-
+            free_indices.push_back(static_cast<int32_t>(i));
         }
-        etop.store(static_cast<int32_t>(num_blocks-1),std::memory_order_release); 
       }
       //disable copying
       egressbufferpool(const egressbufferpool&)=delete;
       egressbufferpool& operator=(const egressbufferpool&)=delete;
 
 
-      bufferblock* allocate()noexcept{
-       int32_t cur_top=etop.load(std::memory_order_relaxed);
-        while(cur_top>=0){
-            if(etop.compare_exchange_weak(cur_top,cur_top-1,std::memory_order_acquire,std::memory_order_relaxed)){
-              int32_t idx=estack[cur_top].load(std::memory_order_relaxed);
-              curr_abyte.fetch_add(block_sz,std::memory_order_relaxed);
-                return &blocks[idx];
-            }
+      bufferblock* allocate() noexcept {
+        std::lock_guard<std::mutex> lock(free_mutex);
+        if (free_indices.empty()) {
+            return nullptr;
         }
-        return nullptr;//pckt dropped
+        const int32_t idx = free_indices.back();
+        free_indices.pop_back();
+        allocated[static_cast<size_t>(idx)] = true;
+        allocated_bytes += block_sz;
+        return &blocks[static_cast<size_t>(idx)];
       }
      void deallocate(bufferblock* block)noexcept{
         if(!block)return;
 
         ptrdiff_t idx=block-blocks.data();
 
-        int32_t cur_top=etop.load(std::memory_order_relaxed);
-        while(1){
-           if(etop.compare_exchange_weak(cur_top,cur_top+1,std::memory_order_release,std::memory_order_relaxed)){
-            estack[cur_top+1].store(static_cast<int32_t>(idx),std::memory_order_relaxed);
-            curr_abyte.fetch_sub(block_sz,std::memory_order_relaxed);
-            break;
-           }
+        if (idx < 0 || static_cast<size_t>(idx) >= blocks.size()) {
+            return;
         }
+        std::lock_guard<std::mutex> lock(free_mutex);
+        if (!allocated[static_cast<size_t>(idx)]) {
+            return;
+        }
+        allocated[static_cast<size_t>(idx)] = false;
+        free_indices.push_back(static_cast<int32_t>(idx));
+        allocated_bytes -= block_sz;
      }
 
      [[nodiscard]] size_t get_alloc_bytes()const noexcept{
-        return curr_abyte.load(std::memory_order_relaxed);
+        std::lock_guard<std::mutex> lock(free_mutex);
+        return allocated_bytes;
      }
      [[nodiscard]] bool is_exhaust()const noexcept{
-        return etop.load(std::memory_order_relaxed)<0;
+        std::lock_guard<std::mutex> lock(free_mutex);
+        return free_indices.empty();
      }
 
     };

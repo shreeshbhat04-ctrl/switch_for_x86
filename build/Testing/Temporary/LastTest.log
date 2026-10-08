@@ -1,0 +1,18 @@
+Start testing: Oct 08 17:03 India Standard Time
+----------------------------------------------------------
+1/1 Testing: packet_generator_test
+1/1 Test: packet_generator_test
+Command: "C:/Users/shree/go/switch_packet/switch_for_x86/build/Debug/packet_generator_test.exe"
+Directory: C:/Users/shree/go/switch_packet/switch_for_x86/build
+"packet_generator_test" start time: Oct 08 17:03 India Standard Time
+Output:
+----------------------------------------------------------
+<end of output>
+Test time =   0.17 sec
+----------------------------------------------------------
+Test Passed.
+"packet_generator_test" end time: Oct 08 17:03 India Standard Time
+"packet_generator_test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+End testing: Oct 08 17:03 India Standard Time
