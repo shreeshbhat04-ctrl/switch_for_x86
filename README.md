@@ -1,102 +1,15 @@
 # switch_for_x86
 software model of switch
-```bash
-PS C:\Users\shree\go\switch_packet> cmake -S . -B build -DBUILD_TESTING=ON
->> cmake --build build --config Release
->> ctest --test-dir build -C Release --output-on-failure
-CMake Error: The source directory "C:/Users/shree/go/switch_packet" does notappear to contain CMakeLists.txt.
-Specify --help for usage, or press the help button on the CMake GUI.
-Error: C:/Users/shree/go/switch_packet/build is not a directory
-Failed to change working directory to "C:/Users/shree/go/switch_packet/build": No such file or directory
-PS C:\Users\shree\go\switch_packet> cmake -S . -B build -DBUILD_TESTING=ON
->> cmake --build build --config Release
->> ctest --test-dir build -C Release --output-on-failure^C
-PS C:\Users\shree\go\switch_packet> cd C:\Users\shree\go\switch_packet\switch_for_x86
->> 
->> cmake -S . -B build -DBUILD_TESTING=ON
->> cmake --build build --config Release
->> ctest --test-dir build -C Release --output-on-failure
--- Selecting Windows SDK version 10.0.26100.0 to target Windows 10.0.26200.
--- Configuring done (0.1s)
--- Generating done (1.7s)
--- Build files have been written to: C:/Users/shree/go/switch_packet/switch_for_x86/build
-MSBuild version 17.14.23+b0019275e for .NET Framework
+Scenario: Build a software model of a 4-port 10 GbE L3 switch that runs on a multicore x86 box,validate forwarding behavior and performance before the silicon exists.
 
-  1>Checking Build System
-  Building Custom Rule C:/Users/shree/go/switch_packet/switch_for_x86/CMakeL
-  ists.txt
-  bench_lpm.cpp
-  bench_lpm.vcxproj -> C:\Users\shree\go\switch_packet\switch_for_x86\build\
-  Release\bench_lpm.exe
-  Building Custom Rule C:/Users/shree/go/switch_packet/switch_for_x86/CMakeL
-  ists.txt
-  test_lpm_reference.cpp
-  lpm_reference_test.vcxproj -> C:\Users\shree\go\switch_packet\switch_for_x
-  86\build\Release\lpm_reference_test.exe
-  Building Custom Rule C:/Users/shree/go/switch_packet/switch_for_x86/CMakeL
-  ists.txt
-  packet_generator.cpp
-  packet_generator_test.vcxproj -> C:\Users\shree\go\switch_packet\switch_fo
-  r_x86\build\Release\packet_generator_test.exe
-  Building Custom Rule C:/Users/shree/go/switch_packet/switch_for_x86/CMakeL
-  ists.txt
-  test_parser.cpp
-  parser_test.vcxproj -> C:\Users\shree\go\switch_packet\switch_for_x86\buil
-  d\Release\parser_test.exe
-  Building Custom Rule C:/Users/shree/go/switch_packet/switch_for_x86/CMakeL
-  ists.txt
-  test_pool_mt.cpp
-  pool_mt_test.vcxproj -> C:\Users\shree\go\switch_packet\switch_for_x86\bui
-  ld\Release\pool_mt_test.exe
-  Building Custom Rule C:/Users/shree/go/switch_packet/switch_for_x86/CMakeL
-  ists.txt
-  test_ring_stress.cpp
-  ring_stress_test.vcxproj -> C:\Users\shree\go\switch_packet\switch_for_x86
-  \build\Release\ring_stress_test.exe
-  Building Custom Rule C:/Users/shree/go/switch_packet/switch_for_x86/CMakeL
-  ists.txt
-  test_scheduler.cpp
-  scheduler_test.vcxproj -> C:\Users\shree\go\switch_packet\switch_for_x86\b
-  uild\Release\scheduler_test.exe
-  Building Custom Rule C:/Users/shree/go/switch_packet/switch_for_x86/CMakeL
-  ists.txt
-  main.cpp
-  switch_for_x86.vcxproj -> C:\Users\shree\go\switch_packet\switch_for_x86\b
-  uild\Release\switch_for_x86.exe
-  Building Custom Rule C:/Users/shree/go/switch_packet/switch_for_x86/CMakeL
-  ists.txt
-Test project C:/Users/shree/go/switch_packet/switch_for_x86/build
-    Start 1: packet_generator_test
-1/6 Test #1: packet_generator_test ............   Passed    0.16 sec
-    Start 2: parser_test
-2/6 Test #2: parser_test ......................   Passed    0.85 sec
-    Start 3: lpm_reference_test
-3/6 Test #3: lpm_reference_test ...............   Passed    0.24 sec
-    Start 4: scheduler_test
-4/6 Test #4: scheduler_test ...................   Passed    0.92 sec
-    Start 5: ring_stress_test
-5/6 Test #5: ring_stress_test .................   Passed    0.11 sec
-    Start 6: pool_mt_test
-6/6 Test #6: pool_mt_test .....................   Passed    1.49 sec
+## Constraints
 
-100% tests passed, 0 tests failed out of 6
-
-Total Test time (real) =   6.51 sec
-PS C:\Users\shree\go\switch_packet\switch_for_x86> .\build\Release\bench_lpm.exe 5000 1
-threads=1 37.9 ns/lookup 114 cycles @3.0GHz nodes=27022
-PS C:\Users\shree\go\switch_packet\switch_for_x86> .\build\Release\parser_test.exe
->> .\build\Release\lpm_reference_test.exe
->> .\build\Release\scheduler_test.exe
->> .\build\Release\ring_stress_test.exe 10000
->> .\build\Release\pool_mt_test.exe
->> .\build\Release\packet_generator_test.exe
-RESULT: PASSED
-RESULT: PASSED
-RESULT: PASSED
-RESULT: PASSED
-RESULT: PASSED
-```
-
+- [x] 4 ports, each at 10 Gbps line rate with worst-case traffic of 64B frames
+- [x] Forwarding table: 500K IPv4 routes (longest-prefix match), with route updates arriving at ~1K/sec while forwarding continues
+- [x] 8 egress queues per port: queue 7 is strict priority (control traffic), queues 0-6 share bandwidth by weight
+- [x] Egress buffer: 12 MB shared across all queues
+- [ ] Target: sustain line rate with zero loss in steady state, p99.9 forwarding latency under 50 µs, and no more than 2 cores per port
+- [x] Packets may carry an 802.1Q VLAN tag, and some will be malformed (truncated, bad IPv4 header checksum, TTL=0)
 
 
 ## Running from WSL
@@ -155,4 +68,39 @@ Test project C:/Users/shree/go/switch_packet/switch_for_x86/build
 Total Test time (real) =   0.83 sec
 === bench_lpm
 threads=1 50.5 ns/lookup 152 cycles @3.0GHz nodes=27022
+```
+## failure of the first design
+```bash
+cd /home/sw && O=/tmp/swv && mkdir -p $O && INC="-Iinclude -Itests" && B="-std=c++17 -g -Wall -Wextra"
+for t in test_parser test_lpm_reference test_scheduler packet_generator; do echo "=== $t (ASan+UBSan)"; g++ $B $INC -O1 -fsanitize=address,undefined tests/$t.cpp -o $O/$t 2>&1 | grep -E "error" ; $O/$t 2>&1 | tail -4; done
+for t in test_ring_stress test_pool_mt; do echo "=== $t (TSan)"; g++ $B $INC -O1 -fsanitize=thread tests/$t.cpp -o $O/$t -pthread 2>&1 | grep error; $O/$t 20000 2>&1 | tail -3; done
+echo "=== bench_lpm"; g++ $B $INC -O2 -DNDEBUG tests/bench_lpm.cpp -o $O/bench -pthread 2>&1 | grep error; $O/bench 5000 1 | tail -3
+echo "=== main (Release)"; g++ $B $INC -O2 -DNDEBUG src/main.cpp -o $O/main -pthread 2>&1 | grep error; $O/main 2>&1 | grep -v pin_thread
+Output
+
+=== test_parser (ASan+UBSan)
+RESULT: PASSED
+=== test_lpm_reference (ASan+UBSan)
+RESULT: PASSED
+=== test_scheduler (ASan+UBSan)
+RESULT: PASSED
+=== packet_generator (ASan+UBSan)
+=== test_ring_stress (TSan)
+RESULT: PASSED
+=== test_pool_mt (TSan)
+RESULT: PASSED
+=== bench_lpm
+threads=1 51.9 ns/lookup 156 cycles @3.0GHz nodes=27022
+=== main (Release)
+Starting 4-Port 10 GbE L3 Switch ...
+[Ingress] injection complete.
+
+================ SWITCH PERFORMANCE REPORT ================
+Total Packets Received:      1000000
+Total Packets Forwarded:     1000000
+Total Packets Dropped:       0
+  - Malformed/Checksum Drops: 0
+  - Buffer Exhaustion Drops:  0
+p99.9 Forwarding Latency:    2796.203 us (Target: < 50 us) <---
+===========================================================
 ```
