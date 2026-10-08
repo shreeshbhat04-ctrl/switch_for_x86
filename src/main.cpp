@@ -59,7 +59,7 @@ int main(){
      for (uint64_t i = 0; i < pckt_to_inject && running; i++)
      {
         packet pkt;
-        pkt.length=64; //worst case 64b frame
+        pkt.length=64; //worst case 64kb frame
         pkt.metadata.ingress_port=static_cast<uint8_t>(i%4);
         pkt.metadata.entry_timestamp=PerformanceStats::get_rdtsc();
         // Ethernet II + IPv4 header: 192.0.2.1 -> 192.168.1.50.

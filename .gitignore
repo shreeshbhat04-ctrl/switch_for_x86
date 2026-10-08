@@ -1,6 +1,8 @@
 # Prerequisites
 *.d
 build/
+docs/
+LATENCY_BENCHMARK_MODIFICATIONS.md/
 # Compiled Object files
 *.slo
 *.lo

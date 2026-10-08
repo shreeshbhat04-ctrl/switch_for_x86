@@ -40,6 +40,7 @@ if(BUILD_TESTING)
         PASS_REGULAR_EXPRESSION "RESULT: PASSED"
     )
     add_switch_test(pool_mt_test tests/test_pool_mt.cpp)
+    add_switch_test(benchmark_support_test tests/test_benchmark_support.cpp)
 
     add_executable(bench_lpm tests/bench_lpm.cpp)
     target_link_libraries(bench_lpm PRIVATE switch_headers)

@@ -38,10 +38,22 @@ public:
     [[nodiscard]] static uint64_t get_rdtsc() noexcept
     {
 #if defined(_MSC_VER)
-        return __rdtsc();
+        _ReadWriteBarrier();
+        _mm_lfence();
+        const uint64_t value = __rdtsc();
+        _mm_lfence();
+        _ReadWriteBarrier();
+        return value;
 #elif defined(__x86_64__) || defined(__i386__)
-        unsigned int lo, hi;
-        __asm__ __volatile__("lfence\nrdtsc" : "=a"(lo), "=d"(hi) :: "memory");
+        unsigned int lo = 0;
+        unsigned int hi = 0;
+        __asm__ __volatile__(
+            "lfence\n\t"
+            "rdtsc\n\t"
+            "lfence"
+            : "=a"(lo), "=d"(hi)
+            :
+            : "memory");
         return (static_cast<uint64_t>(hi) << 32) | lo;
 #else
         return static_cast<uint64_t>(
