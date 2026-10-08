@@ -72,7 +72,6 @@ public:
     {
         malformed_packets_dropped_.fetch_add(1, std::memory_order_relaxed);
         total_packets_dropped_.fetch_add(1, std::memory_order_relaxed);
-        record_received();
     }
 
     void record_buffer_drop() noexcept

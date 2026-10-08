@@ -4,6 +4,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstring>
+#include <memory>
 #ifndef _WIN32
 #include <pthread.h>
 #endif
@@ -45,8 +46,10 @@ int main(){
     lpm_table.insert(0x00000000, 0, 0);  // Default route -> Port 0
     //spsc ring buff (ingress->parse->lookup->scheduler->egress)
     constexpr size_t ring_capacity=4096;
-    Spscringbuffer<packet,ring_capacity>rx_to_parse_ring;
-    Spscringbuffer<packet,ring_capacity>parse_to_lookup_ring;
+    auto rx_to_parse_ring =
+        std::make_unique<Spscringbuffer<packet, ring_capacity>>();
+    auto parse_to_lookup_ring =
+        std::make_unique<Spscringbuffer<packet, ring_capacity>>();
 
     std::atomic<bool>running{true};
     // spawn pipeline threads to core
@@ -59,12 +62,31 @@ int main(){
         pkt.length=64; //worst case 64b frame
         pkt.metadata.ingress_port=static_cast<uint8_t>(i%4);
         pkt.metadata.entry_timestamp=PerformanceStats::get_rdtsc();
-        //mock ipv4 
-        pkt.data[12]=0x08;pkt.data[13]=0x00;
-        uint32_t dst_ip=switchmodel::ntohl(0xC0A80132);
-        std::memcpy(&pkt.data[30],&dst_ip,4);
+        // Ethernet II + IPv4 header: 192.0.2.1 -> 192.168.1.50.
+        pkt.data[12] = 0x08;
+        pkt.data[13] = 0x00;
+        pkt.data[14] = 0x45; // IPv4, IHL 5 (20 bytes).
+        pkt.data[15] = 0x00;
+        pkt.data[16] = 0x00;
+        pkt.data[17] = 0x14; // Total IPv4 length: 20 bytes.
+        pkt.data[18] = 0x00;
+        pkt.data[19] = 0x00;
+        pkt.data[20] = 0x00;
+        pkt.data[21] = 0x00;
+        pkt.data[22] = 0x40; // TTL 64.
+        pkt.data[23] = 0x00; // No IP protocol payload in this simulation.
+        pkt.data[24] = 0xF7;
+        pkt.data[25] = 0x0E; // Header checksum.
+        pkt.data[26] = 192;
+        pkt.data[27] = 0;
+        pkt.data[28] = 2;
+        pkt.data[29] = 1;
+        pkt.data[30] = 192;
+        pkt.data[31] = 168;
+        pkt.data[32] = 1;
+        pkt.data[33] = 50;
         stats.record_received();
-        while(!rx_to_parse_ring.push(std::move(pkt))&& running){
+        while(!rx_to_parse_ring->push(std::move(pkt))&& running){
             std::this_thread::yield();
         }
 
@@ -77,13 +99,13 @@ int main(){
     std::thread parser_th([&](){
      packet pkt;
      while(running){
-        if(rx_to_parse_ring.pop(pkt)){
+        if(rx_to_parse_ring->pop(pkt)){
             bool ok= parser::parse(pkt);
             if(!ok){
                 stats.record_malformed_drop();
                 continue;
             }
-            while(!parse_to_lookup_ring.push(std::move(pkt))&&running){
+            while(!parse_to_lookup_ring->push(std::move(pkt))&&running){
                 std::this_thread::yield();
             }
         }else{
@@ -99,7 +121,7 @@ int main(){
         egressscheduler scheduler;
 
     while(running){
-       if(parse_to_lookup_ring.pop(pkt)){
+       if(parse_to_lookup_ring->pop(pkt)){
         //lookup
         int egress_port=lpm_table.lookup(pkt.metadata.dst_ip);
         pkt.metadata.egress_port=(egress_port>=0)?static_cast<uint8_t>(egress_port):0;

@@ -19,6 +19,7 @@ namespace switchmodel {
     struct Node {
         std::array<int32_t, stride_count> child{};
         int outport{-1};
+        int8_t outlen{-1};
 
         Node() noexcept
         {
@@ -65,7 +66,10 @@ namespace switchmodel {
         }
 
         if (remainder == 0) {
-            snapshot.nodes[node].outport = outport;
+            if (static_cast<int>(prefix_len) >= snapshot.nodes[node].outlen) {
+                snapshot.nodes[node].outport = outport;
+                snapshot.nodes[node].outlen = static_cast<int8_t>(prefix_len);
+            }
             return;
         }
 
@@ -76,7 +80,10 @@ namespace switchmodel {
         const uint8_t last = static_cast<uint8_t>(first | ((1U << (stride_bits - remainder)) - 1U));
         for (uint8_t value = first; value <= last; ++value) {
             const int32_t child = clone_child(snapshot, node, value);
-            snapshot.nodes[child].outport = outport;
+            if (static_cast<int>(prefix_len) >= snapshot.nodes[child].outlen) {
+                snapshot.nodes[child].outport = outport;
+                snapshot.nodes[child].outlen = static_cast<int8_t>(prefix_len);
+            }
         }
     }
 

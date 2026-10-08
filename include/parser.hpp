@@ -9,6 +9,8 @@ public:
  static bool parse(packet& packets){
     packets.metadata.is_corrupted = false;
     packets.metadata.is_expired = false;
+    packets.metadata.has_vlan = false;
+    packets.metadata.vlan_id = 0;
     if(packets.length < 14 || packets.length > packets.data.size()){
         packets.metadata.is_corrupted=true;
         return false;

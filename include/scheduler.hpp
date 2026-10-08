@@ -12,6 +12,7 @@ namespace switchmodel{
         int weight{0};
         std::size_t deficit{0};
         size_t max_pckt{1000};
+        bool fresh{false};
     };
     class egressscheduler{
       private:
@@ -44,29 +45,32 @@ namespace switchmodel{
         q[control_que].blocks.pop();
         return b;
        }
-       size_t fl=0;
-       while(fl<7){
+       for(size_t step=0; step<7*4; ++step){
         egressqueue& q1=q[cur_drr_idx];
-        if(!q1.blocks.empty()){
-            // add quantum (weight*mtu)
-            q1.deficit += static_cast<std::size_t>(q1.weight) * 100;
-            bufferblock* head_blk=q1.blocks.front();
-            const size_t pkt_sz=head_blk->length;
-            if (pkt_sz <= q1.deficit) {
-                q1.deficit -= pkt_sz;
-                q1.blocks.pop();
-                if (q1.blocks.empty()) {
-                    q1.deficit = 0;
-                    cur_drr_idx = (cur_drr_idx + 1) % 7;
-                }
-                return head_blk;
-            }
-        }else{
-            //rst the que if empty
+        if(q1.blocks.empty()){
             q1.deficit=0;
+            q1.fresh=false;
+            cur_drr_idx=(cur_drr_idx+1)%7;
+            continue;
         }
+        if(!q1.fresh){
+            q1.deficit += static_cast<std::size_t>(q1.weight) * 100;
+            q1.fresh=true;
+        }
+        bufferblock* head_blk=q1.blocks.front();
+        const size_t pkt_sz=head_blk->length;
+        if (pkt_sz <= q1.deficit) {
+            q1.deficit -= pkt_sz;
+            q1.blocks.pop();
+            if (q1.blocks.empty()) {
+                q1.deficit=0;
+                q1.fresh=false;
+                cur_drr_idx=(cur_drr_idx+1)%7;
+            }
+            return head_blk;
+        }
+        q1.fresh=false;
         cur_drr_idx=(cur_drr_idx+1)%7;
-        fl++;
        } 
        return nullptr;
       }

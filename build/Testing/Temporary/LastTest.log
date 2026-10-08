@@ -1,18 +1,99 @@
-Start testing: Oct 08 17:03 India Standard Time
+Start testing: Oct 08 18:49 India Standard Time
 ----------------------------------------------------------
-1/1 Testing: packet_generator_test
-1/1 Test: packet_generator_test
-Command: "C:/Users/shree/go/switch_packet/switch_for_x86/build/Debug/packet_generator_test.exe"
+1/6 Testing: packet_generator_test
+1/6 Test: packet_generator_test
+Command: "C:/Users/shree/go/switch_packet/switch_for_x86/build/Release/packet_generator_test.exe"
 Directory: C:/Users/shree/go/switch_packet/switch_for_x86/build
-"packet_generator_test" start time: Oct 08 17:03 India Standard Time
+"packet_generator_test" start time: Oct 08 18:49 India Standard Time
 Output:
 ----------------------------------------------------------
+<end of output>
+Test time =   0.11 sec
+----------------------------------------------------------
+Test Passed.
+"packet_generator_test" end time: Oct 08 18:49 India Standard Time
+"packet_generator_test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+2/6 Testing: parser_test
+2/6 Test: parser_test
+Command: "C:/Users/shree/go/switch_packet/switch_for_x86/build/Release/parser_test.exe"
+Directory: C:/Users/shree/go/switch_packet/switch_for_x86/build
+"parser_test" start time: Oct 08 18:49 India Standard Time
+Output:
+----------------------------------------------------------
+RESULT: PASSED
+<end of output>
+Test time =   0.34 sec
+----------------------------------------------------------
+Test Passed.
+"parser_test" end time: Oct 08 18:49 India Standard Time
+"parser_test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+3/6 Testing: lpm_reference_test
+3/6 Test: lpm_reference_test
+Command: "C:/Users/shree/go/switch_packet/switch_for_x86/build/Release/lpm_reference_test.exe"
+Directory: C:/Users/shree/go/switch_packet/switch_for_x86/build
+"lpm_reference_test" start time: Oct 08 18:49 India Standard Time
+Output:
+----------------------------------------------------------
+RESULT: PASSED
 <end of output>
 Test time =   0.17 sec
 ----------------------------------------------------------
 Test Passed.
-"packet_generator_test" end time: Oct 08 17:03 India Standard Time
-"packet_generator_test" time elapsed: 00:00:00
+"lpm_reference_test" end time: Oct 08 18:49 India Standard Time
+"lpm_reference_test" time elapsed: 00:00:00
 ----------------------------------------------------------
 
-End testing: Oct 08 17:03 India Standard Time
+4/6 Testing: scheduler_test
+4/6 Test: scheduler_test
+Command: "C:/Users/shree/go/switch_packet/switch_for_x86/build/Release/scheduler_test.exe"
+Directory: C:/Users/shree/go/switch_packet/switch_for_x86/build
+"scheduler_test" start time: Oct 08 18:49 India Standard Time
+Output:
+----------------------------------------------------------
+RESULT: PASSED
+<end of output>
+Test time =   0.04 sec
+----------------------------------------------------------
+Test Passed.
+"scheduler_test" end time: Oct 08 18:49 India Standard Time
+"scheduler_test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+5/6 Testing: ring_stress_test
+5/6 Test: ring_stress_test
+Command: "C:/Users/shree/go/switch_packet/switch_for_x86/build/Release/ring_stress_test.exe" "10000"
+Directory: C:/Users/shree/go/switch_packet/switch_for_x86/build
+"ring_stress_test" start time: Oct 08 18:49 India Standard Time
+Output:
+----------------------------------------------------------
+RESULT: PASSED
+<end of output>
+Test time =   0.04 sec
+----------------------------------------------------------
+Test Pass Reason:
+Required regular expression found. Regex=[RESULT: PASSED]
+"ring_stress_test" end time: Oct 08 18:49 India Standard Time
+"ring_stress_test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+6/6 Testing: pool_mt_test
+6/6 Test: pool_mt_test
+Command: "C:/Users/shree/go/switch_packet/switch_for_x86/build/Release/pool_mt_test.exe"
+Directory: C:/Users/shree/go/switch_packet/switch_for_x86/build
+"pool_mt_test" start time: Oct 08 18:49 India Standard Time
+Output:
+----------------------------------------------------------
+RESULT: PASSED
+<end of output>
+Test time =   0.05 sec
+----------------------------------------------------------
+Test Passed.
+"pool_mt_test" end time: Oct 08 18:49 India Standard Time
+"pool_mt_test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+End testing: Oct 08 18:49 India Standard Time
