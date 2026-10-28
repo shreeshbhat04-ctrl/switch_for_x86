@@ -5,7 +5,10 @@
 #include <chrono>
 #include <cstring>
 #include <memory>
-#ifndef _WIN32
+#ifdef _WIN32
+#define NOMINMAX
+#include <windows.h>
+#else
 #include <pthread.h>
 #endif
 
@@ -18,6 +21,13 @@
 #include "stats.hpp"
 #include "utils.hpp"
 
+#if defined(_MSC_VER) || defined(__x86_64__) || defined(__i386__)
+#include <immintrin.h>
+#define CPU_PAUSE() _mm_pause()
+#else
+#define CPU_PAUSE() ((void)0)
+#endif
+
 void pin_thread_to_core(std::thread& th,int c_id){
 #ifndef _WIN32
     cpu_set_t cpuset;
@@ -27,9 +37,9 @@ void pin_thread_to_core(std::thread& th,int c_id){
     if(rc!=0){
         std::cerr<<"Warning: failed in pin_thread_to_core()"<<c_id<<"\n";
     }
+#else
+    SetThreadAffinityMask(th.native_handle(), DWORD_PTR(1) << c_id);
 #endif
-  
-    
 }
 
 using namespace switchmodel;
@@ -45,7 +55,7 @@ int main(){
     lpm_table.insert(0x0A000000, 8, 2);  // 10.0.0.0/8 -> Port 2
     lpm_table.insert(0x00000000, 0, 0);  // Default route -> Port 0
     //spsc ring buff (ingress->parse->lookup->scheduler->egress)
-    constexpr size_t ring_capacity=4096;
+    constexpr size_t ring_capacity=8;
     auto rx_to_parse_ring =
         std::make_unique<Spscringbuffer<packet, ring_capacity>>();
     auto parse_to_lookup_ring =
@@ -56,40 +66,44 @@ int main(){
     // core 0:traffic ingress /generator driver
     std::thread ingress_th([&](){
      uint64_t pckt_to_inject =1000000;
+     packet base_pkt;
+     base_pkt.length = 64;
+     // Ethernet II + IPv4 header: 192.0.2.1 -> 192.168.1.50.
+     base_pkt.data[12] = 0x08;
+     base_pkt.data[13] = 0x00;
+     base_pkt.data[14] = 0x45; // IPv4, IHL 5 (20 bytes).
+     base_pkt.data[15] = 0x00;
+     base_pkt.data[16] = 0x00;
+     base_pkt.data[17] = 0x14; // Total IPv4 length: 20 bytes.
+     base_pkt.data[18] = 0x00;
+     base_pkt.data[19] = 0x00;
+     base_pkt.data[20] = 0x00;
+     base_pkt.data[21] = 0x00;
+     base_pkt.data[22] = 0x40; // TTL 64.
+     base_pkt.data[23] = 0x00; // No IP protocol payload in this simulation.
+     base_pkt.data[24] = 0xF7;
+     base_pkt.data[25] = 0x0E; // Header checksum.
+     base_pkt.data[26] = 192;
+     base_pkt.data[27] = 0;
+     base_pkt.data[28] = 2;
+     base_pkt.data[29] = 1;
+     base_pkt.data[30] = 192;
+     base_pkt.data[31] = 168;
+     base_pkt.data[32] = 1;
+     base_pkt.data[33] = 50;
+
      for (uint64_t i = 0; i < pckt_to_inject && running; i++)
      {
-        packet pkt;
-        pkt.length=64; //worst case 64kb frame
-        pkt.metadata.ingress_port=static_cast<uint8_t>(i%4);
-        pkt.metadata.entry_timestamp=PerformanceStats::get_rdtsc();
-        // Ethernet II + IPv4 header: 192.0.2.1 -> 192.168.1.50.
-        pkt.data[12] = 0x08;
-        pkt.data[13] = 0x00;
-        pkt.data[14] = 0x45; // IPv4, IHL 5 (20 bytes).
-        pkt.data[15] = 0x00;
-        pkt.data[16] = 0x00;
-        pkt.data[17] = 0x14; // Total IPv4 length: 20 bytes.
-        pkt.data[18] = 0x00;
-        pkt.data[19] = 0x00;
-        pkt.data[20] = 0x00;
-        pkt.data[21] = 0x00;
-        pkt.data[22] = 0x40; // TTL 64.
-        pkt.data[23] = 0x00; // No IP protocol payload in this simulation.
-        pkt.data[24] = 0xF7;
-        pkt.data[25] = 0x0E; // Header checksum.
-        pkt.data[26] = 192;
-        pkt.data[27] = 0;
-        pkt.data[28] = 2;
-        pkt.data[29] = 1;
-        pkt.data[30] = 192;
-        pkt.data[31] = 168;
-        pkt.data[32] = 1;
-        pkt.data[33] = 50;
+        packet pkt = base_pkt;
+        pkt.metadata.ingress_port = static_cast<uint8_t>(i % 4);
         stats.record_received();
-        while(!rx_to_parse_ring->push(std::move(pkt))&& running){
-            std::this_thread::yield();
+        while (running) {
+            pkt.metadata.entry_timestamp = PerformanceStats::get_rdtsc();
+            if (rx_to_parse_ring->push(pkt)) {
+                break;
+            }
+            _mm_pause();
         }
-
      }
 
      std::cout<<"[Ingress] injection complete.\n";
@@ -106,10 +120,10 @@ int main(){
                 continue;
             }
             while(!parse_to_lookup_ring->push(std::move(pkt))&&running){
-                std::this_thread::yield();
+                _mm_pause();
             }
         }else{
-            std::this_thread::yield();
+            _mm_pause();
         }
      }
      
@@ -149,7 +163,7 @@ int main(){
         }
 
        }else{
-        std::this_thread::yield();
+         _mm_pause();
        }
     }
         });

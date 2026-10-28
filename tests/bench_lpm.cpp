@@ -27,7 +27,7 @@ int main(int argc, char** argv)
     for (int thread = 0; thread < threads; ++thread) {
         workers.emplace_back([&, thread] {
             const auto start = std::chrono::steady_clock::now();
-            long sink = 0;
+            volatile long sink = 0;
             for (long i = 0; i < iterations; ++i) {
                 sink += table.lookup(ips[(i + thread * 4099) & (ips.size() - 1)]);
             }

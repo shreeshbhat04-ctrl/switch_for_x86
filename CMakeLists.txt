@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(switch_for_x86 LANGUAGES CXX)
+project(switch_for_x86 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -13,6 +13,7 @@ target_include_directories(switch_headers INTERFACE
 
 add_executable(switch_for_x86
     src/main.cpp
+    src/checksum.c
 )
 target_link_libraries(switch_for_x86 PRIVATE switch_headers)
 
@@ -41,6 +42,9 @@ if(BUILD_TESTING)
     )
     add_switch_test(pool_mt_test tests/test_pool_mt.cpp)
     add_switch_test(benchmark_support_test tests/test_benchmark_support.cpp)
+    add_executable(checksum_test tests/test_checksum.cpp src/checksum.c)
+    target_link_libraries(checksum_test PRIVATE switch_headers)
+    add_test(NAME checksum_test COMMAND checksum_test)
 
     add_executable(bench_lpm tests/bench_lpm.cpp)
     target_link_libraries(bench_lpm PRIVATE switch_headers)

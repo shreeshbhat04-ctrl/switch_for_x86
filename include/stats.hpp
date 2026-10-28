@@ -16,8 +16,7 @@ private:
     std::atomic<uint64_t> total_packets_dropped_{0};
     std::atomic<uint64_t> malformed_packets_dropped_{0};
     std::atomic<uint64_t> buffer_exhaustion_dropped_{0};
-    std::array<uint64_t, 64> latency_buckets_{};
-    mutable std::mutex latency_mutex_;
+    std::array<std::atomic<uint64_t>, 64> latency_buckets_{};
     double cpu_frequency_ghz_;
 
     void add_latency_cycles(uint64_t cycles) noexcept
@@ -27,13 +26,18 @@ private:
             cycles >>= 1;
             ++bucket;
         }
-        std::lock_guard<std::mutex> lock(latency_mutex_);
         ++latency_buckets_[bucket];
+        latency_buckets_[bucket].fetch_add(1, std::memory_order_relaxed);
     }
 
 public:
     explicit PerformanceStats(double cpu_ghz = 3.0) noexcept
-        : cpu_frequency_ghz_(cpu_ghz > 0.0 ? cpu_ghz : 3.0) {}
+        : cpu_frequency_ghz_(cpu_ghz > 0.0 ? cpu_ghz : 3.0)
+    {
+        for (auto& b : latency_buckets_) {
+            b.store(0, std::memory_order_relaxed);
+        }
+    }
 
     [[nodiscard]] static uint64_t get_rdtsc() noexcept
     {
@@ -94,10 +98,9 @@ public:
 
     [[nodiscard]] double get_p999_latency_us() const noexcept
     {
-        std::lock_guard<std::mutex> lock(latency_mutex_);
         uint64_t total = 0;
-        for (const auto count : latency_buckets_) {
-            total += count;
+        for (const auto& count : latency_buckets_) {
+            total += count.load(std::memory_order_relaxed);
         }
         if (total == 0) {
             return 0.0;
@@ -105,7 +108,7 @@ public:
         const uint64_t target = (total * 999 + 999) / 1000;
         uint64_t seen = 0;
         for (std::size_t i = 0; i < latency_buckets_.size(); ++i) {
-            seen += latency_buckets_[i];
+            seen += latency_buckets_[i].load(std::memory_order_relaxed);
             if (seen >= target) {
                 return cycles_to_microseconds(uint64_t{1} << i);
             }

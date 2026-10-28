@@ -1,6 +1,7 @@
 # Prerequisites
 *.d
 build/
+build-win/
 docs/
 LATENCY_BENCHMARK_MODIFICATIONS.md/
 # Compiled Object files
